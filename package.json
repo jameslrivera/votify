@@ -1,0 +1,25 @@
+{
+  "name": "zk-election",
+  "private": true,
+  "packageManager": "pnpm@12.18.0",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "circuits:build": "pnpm --filter @zk-election/circuits build",
+    "program:build": "NO_DNA=1 anchor build",
+    "program:test": "pnpm --filter @zk-election/tests test:program",
+    "e2e": "pnpm --filter @zk-election/tests test:e2e",
+    "test": "pnpm -r --if-present test",
+    "lint": "pnpm -r --if-present lint",
+    "typecheck": "pnpm -r --if-present typecheck",
+    "demo:up": "./scripts/demo-up.sh",
+    "demo:voter": "pnpm --filter @zk-election/tools demo-voter"
+  },
+  "devDependencies": {
+    "@types/node": "26.6.6",
+    "tsx": "4.23.15",
+    "typescript": "7.0.2",
+    "vitest": "5.1.0"
+  }
+}
