@@ -1,0 +1,27 @@
+{
+  "name": "@zk-election/tools",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "export-vk": "tsx src/export-vk.ts",
+    "gen-vectors": "tsx src/gen-vectors.ts",
+    "typecheck": "tsc -p .",
+    "mock-passport": "tsx src/mock-passport.ts",
+    "build-key-tree": "tsx src/build-key-tree.ts",
+    "demo-voter": "tsx src/demo-voter.ts"
+  },
+  "dependencies": {
+    "@zk-election/constants": "workspace:*",
+    "@zk-election/merkle": "workspace:*",
+    "@zk-election/proof-format": "workspace:*",
+    "poseidon-lite": "0.3.0",
+    "@zk-election/passport": "workspace:*",
+    "snarkjs": "0.7.6",
+    "qrcode": "1.5.4"
+  },
+  "devDependencies": {
+    "@types/snarkjs": "0.7.9",
+    "@types/qrcode": "1.5.6"
+  }
+}

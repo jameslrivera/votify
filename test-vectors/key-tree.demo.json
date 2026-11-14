@@ -1,0 +1,12 @@
+{
+  "config": "demo",
+  "note": "Includes the MOCK DSC key. Anyone with the mock private key can register fake voters.",
+  "depth": 8,
+  "keys": [
+    {
+      "name": "MOCK DSC (public test key)",
+      "leaf": "048ad6a3abddbb794f78037d3ac297b99be912faa8c00399b294d85eef5e2e8b"
+    }
+  ],
+  "root": "1ae2e620348a31c4b7299b12c11e692e577b26e37de6181d83e4b454e391e1e3"
+}

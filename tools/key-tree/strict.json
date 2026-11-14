@@ -1,0 +1,4 @@
+{
+  "note": "Real DSC public keys accepted in the strict configuration. A DSC modulus is public certificate data, not personal data. Empty until a real DSC is exported from the iOS app; its chain to the US CSCA certificate has not been checked.",
+  "keys": []
+}

@@ -1,0 +1,7 @@
+{
+  "config": "strict",
+  "note": "Real DSC keys only. Their chain to the US CSCA certificate has NOT been checked.",
+  "depth": 8,
+  "keys": [],
+  "root": "2fa5e5f18f6027a6501bec864564472a616b2e274a41211a444cbe3a99f3cc61"
+}
