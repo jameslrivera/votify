@@ -1,0 +1,21 @@
+{
+  "name": "@zk-election/circuits",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "node scripts/build.mjs && pnpm --filter @zk-election/tools export-vk",
+    "test": "vitest run",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@zk-election/constants": "workspace:*",
+    "@zk-election/merkle": "workspace:*",
+    "@zk-election/passport": "workspace:*",
+    "circomlib": "2.0.5",
+    "snarkjs": "0.7.6"
+  },
+  "devDependencies": {
+    "@types/snarkjs": "0.7.9"
+  }
+}
