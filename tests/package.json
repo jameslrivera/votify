@@ -1,0 +1,24 @@
+{
+  "name": "@zk-election/tests",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test:program": "vitest run --config vitest.config.ts program",
+    "test:e2e": "vitest run --config vitest.config.ts e2e",
+    "typecheck": "tsc -p .",
+    "test:relayer": "vitest run --config vitest.config.ts relayer"
+  },
+  "dependencies": {
+    "@anchor-lang/core": "1.2.2",
+    "@solana/web3.js": "1.99.0",
+    "@zk-election/constants": "workspace:*",
+    "@zk-election/merkle": "workspace:*",
+    "@zk-election/proof-format": "workspace:*",
+    "snarkjs": "0.7.6",
+    "@zk-election/passport": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/snarkjs": "0.7.9"
+  }
+}
