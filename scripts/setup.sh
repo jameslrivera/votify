@@ -34,7 +34,7 @@ if ! have avm; then
 fi
 if ! avm list 2>/dev/null | grep -q "^$ANCHOR_VERSION.*installed"; then
   say "Installing Anchor $ANCHOR_VERSION"
-  current=$(avm list 2>/dev/null | awk '/current/ {print $1}')
+  current=$(avm list 2>/dev/null | awk '/current/ {print $1}' || true)
   avm install "$ANCHOR_VERSION"
   [ -n "${current:-}" ] && avm use "$current" >/dev/null
 fi
@@ -54,10 +54,6 @@ corepack enable pnpm 2>/dev/null || true
 
 say "Installing JavaScript dependencies"
 COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile
-
-say "Placing the localnet program keypair"
-mkdir -p target/deploy
-cp keys/zk_election-keypair.json target/deploy/zk_election-keypair.json
 
 say "Building circuits (local demo trusted setup)"
 pnpm circuits:build

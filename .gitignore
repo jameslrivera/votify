@@ -23,5 +23,6 @@ ios/*.xcodeproj/xcuserdata/
 ios/**/.build/
 .build/
 xcuserdata/
-relayer/.state.json
+relayer/.state*
+relayer/.demo.pid
 relayer/.keys/

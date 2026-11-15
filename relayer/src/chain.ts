@@ -111,6 +111,7 @@ export class Chain {
   private live: RaceLive[] | null = null;
   private liveComplete = false;
   private loading: Promise<RaceLive[]> | null = null;
+  private readonly others = new Map<string, { ids: bigint[]; live: RaceLive[] }>();
 
   constructor(private readonly config: RelayerConfig) {
     const idl = JSON.parse(readFileSync(config.idlPath, "utf8")) as Idl;
@@ -165,21 +166,32 @@ export class Chain {
     return live;
   }
 
-  private freshLive(): void {
-    this.live = this.config.ballot.races.map((race) => ({
-      phase: "registration",
+  private freshLive(): RaceLive[] {
+    return this.config.ballot.races.map((race) => ({
+      phase: "registration" as const,
       tally: race.candidates.map(() => 0),
       leaves: [],
       feed: [],
       voted: new Set<string>(),
     }));
-    this.liveComplete = true;
   }
 
-  private record(index: number, item: RaceTransaction): void {
-    const race = this.live?.[index];
+  private record(live: RaceLive[], index: number, item: RaceTransaction): void {
+    const race = live[index];
     if (!race || race.feed.some((entry) => entry.signature === item.signature)) return;
     race.feed.unshift(item);
+  }
+
+  private async target(electionId: bigint): Promise<{ index: number; live: RaceLive[] }> {
+    const index = this.electionIds.indexOf(electionId);
+    if (index >= 0 && this.electionIds.length === this.config.ballot.races.length) {
+      return { index, live: await this.state() };
+    }
+    for (const other of this.others.values()) {
+      const position = other.ids.indexOf(electionId);
+      if (position >= 0) return { index: position, live: other.live };
+    }
+    throw new RelayError("BadRequest", "This proof is for an election that is not on this ballot");
   }
 
   private now(): number {
@@ -234,6 +246,21 @@ export class Chain {
   }
 
   async createBallot(chosen?: bigint[]): Promise<void> {
+    this.switchTo(await this.createElections(chosen));
+  }
+
+  switchTo(ids: bigint[]): void {
+    const key = ids.join(",");
+    const known = this.others.get(key);
+    this.others.delete(key);
+    this.electionIds = ids;
+    this.live = known ? known.live : null;
+    this.liveComplete = Boolean(known);
+    this.loading = null;
+    writeFileSync(this.config.statePath, JSON.stringify({ elections: ids.map(String) }) + "\n");
+  }
+
+  async createElections(chosen?: bigint[]): Promise<bigint[]> {
     const ids: bigint[] = [];
     for (const [index, race] of this.config.ballot.races.entries()) {
       const id = chosen?.[index] ?? randomBytes(8).readBigUInt64BE();
@@ -252,11 +279,8 @@ export class Chain {
       );
       ids.push(id);
     }
-    this.electionIds = ids;
-    this.scans.clear();
-    this.classified.clear();
-    this.freshLive();
-    writeFileSync(this.config.statePath, JSON.stringify({ elections: ids.map(String) }) + "\n");
+    this.others.set(ids.join(","), { ids, live: this.freshLive() });
+    return ids;
   }
 
   electionIdsNow(): bigint[] {
@@ -430,7 +454,7 @@ export class Chain {
     const proof = proofToSolana(body.proof);
     const inputs = publicSignalsToBytes(body.publicSignals);
     const electionId = BigInt(body.publicSignals[REGISTER_INPUT.electionId]!);
-    this.raceFor(electionId);
+    const { index, live } = await this.target(electionId);
     const election = this.electionAddress(electionId);
     const nullifier = inputs[REGISTER_INPUT.passportNullifier]!;
     const tx = await this.methods
@@ -455,14 +479,12 @@ export class Chain {
       })
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: CU_LIMIT.register })])
       .transaction();
-    const index = this.raceFor(electionId);
-    const ids = this.electionIds;
     let signature: string;
     try {
       signature = await this.send(tx, "register", this.config.demoMode);
     } catch (e) {
-      if (e instanceof RelayError && e.signature && ids === this.electionIds) {
-        this.record(index, {
+      if (e instanceof RelayError && e.signature) {
+        this.record(live, index, {
           signature: e.signature,
           time: this.now(),
           kind: e.code === "AlreadyRegistered" ? "double-registration" : "rejected",
@@ -470,12 +492,9 @@ export class Chain {
       }
       throw e;
     }
-    await this.state();
     const leaf = await this.registeredLeaf(signature);
-    if (ids === this.electionIds && this.live) {
-      if (leaf) this.live[index]!.leaves[leaf.index] = leaf.commitment;
-      this.record(index, { signature, time: this.now(), kind: "registered" });
-    }
+    if (leaf) live[index]!.leaves[leaf.index] = leaf.commitment;
+    this.record(live, index, { signature, time: this.now(), kind: "registered" });
     return signature;
   }
 
@@ -503,7 +522,8 @@ export class Chain {
     const proof = proofToSolana(body.proof);
     const inputs = publicSignalsToBytes(body.publicSignals);
     const electionId = BigInt(body.publicSignals[VOTE_INPUT.electionId]!);
-    this.raceFor(electionId);
+    const index = this.raceFor(electionId);
+    const live = await this.state();
     const election = this.electionAddress(electionId);
     const nullifier = inputs[VOTE_INPUT.voteNullifier]!;
     const tx = await this.methods
@@ -527,15 +547,13 @@ export class Chain {
       })
       .preInstructions([ComputeBudgetProgram.setComputeUnitLimit({ units: CU_LIMIT.castVote })])
       .transaction();
-    const index = this.raceFor(electionId);
-    const ids = this.electionIds;
     const option = Number(body.publicSignals[VOTE_INPUT.vote]);
     let signature: string;
     try {
       signature = await this.send(tx, "vote", this.config.demoMode);
     } catch (e) {
-      if (e instanceof RelayError && e.signature && ids === this.electionIds) {
-        this.record(index, {
+      if (e instanceof RelayError && e.signature) {
+        this.record(live, index, {
           signature: e.signature,
           time: this.now(),
           kind: e.code === "AlreadyVoted" ? "double-vote" : "rejected",
@@ -543,18 +561,15 @@ export class Chain {
       }
       throw e;
     }
-    await this.state();
-    if (ids === this.electionIds && this.live) {
-      const race = this.live[index]!;
-      race.voted.add(BigInt(body.publicSignals[VOTE_INPUT.voteNullifier]!).toString());
-      if (option >= 0 && option < race.tally.length) race.tally[option]! += 1;
-      this.record(index, {
-        signature,
-        time: this.now(),
-        kind: "vote",
-        candidate: this.config.ballot.races[index]!.candidates[option],
-      });
-    }
+    const race = live[index]!;
+    race.voted.add(BigInt(body.publicSignals[VOTE_INPUT.voteNullifier]!).toString());
+    if (option >= 0 && option < race.tally.length) race.tally[option]! += 1;
+    this.record(live, index, {
+      signature,
+      time: this.now(),
+      kind: "vote",
+      candidate: this.config.ballot.races[index]!.candidates[option],
+    });
     return signature;
   }
 

@@ -27,6 +27,7 @@ export interface RelayerConfig {
   proofConcurrency: number;
   seedVoters: number;
   seedPaceMs: number;
+  spareBallots: number;
   freshBallot: boolean;
   ballot: BallotConfig;
   keyTreeConfig: "demo" | "strict";
@@ -80,6 +81,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): RelayerConfig 
     seedVoters: Math.min(60, Math.max(0, Number(env.SEED_VOTERS ?? 0) || 0)),
     freshBallot: env.FRESH_BALLOT === "true" || existsSync(freshMarker(env)),
     seedPaceMs: Math.max(0, Number(env.SEED_PACE_MS ?? 2500) || 0),
+    spareBallots: Math.min(5, Math.max(0, Number(env.SPARE_BALLOTS ?? 2) || 0)),
     ballot: loadBallot(env.BALLOT ?? join(repoRoot, "config", "ballot.emory.json")),
     keyTreeConfig,
     trustedKeyRoot: BigInt("0x" + keyTree.root),

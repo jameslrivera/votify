@@ -4,14 +4,14 @@ import { join } from "node:path";
 import * as snarkjs from "snarkjs";
 import { TREE_DEPTH } from "@zk-election/constants";
 import { IncrementalMerkleTree, commitment, voteNullifier, type Credential } from "@zk-election/merkle";
-import { yymmdd } from "@zk-election/passport";
 import type { SnarkjsProof } from "@zk-election/proof-format";
 import { RelayError, type Chain, type ProofBody } from "./chain.ts";
 import type { RelayerConfig } from "./config.ts";
 import { proveMockRegistrationsInBackground, type DemoCredential } from "./demo-prover.ts";
 
 const SKIP_CHANCE = 0.1;
-const DAY_MS = 24 * 60 * 60 * 1000;
+const REGISTER_AT_ONCE = 6;
+const PROVE_AHEAD = 4;
 
 export type SimulationState = "off" | "preparing" | "ready" | "running" | "done";
 
@@ -19,21 +19,17 @@ export interface SimulationInfo {
   state: SimulationState;
   voters: number;
   total: number;
+  spares: number;
 }
 
-interface PreparedVoter extends DemoCredential {
-  proofs: ProofBody[];
-}
-
-interface NextBatch {
+interface StoredBallot {
   ids: string[];
-  date: number;
-  voters: PreparedVoter[];
+  voters: DemoCredential[];
 }
 
 interface SeedFile {
-  current?: { ids: string[]; voters: DemoCredential[] };
-  next?: NextBatch;
+  current?: StoredBallot;
+  spares?: StoredBallot[];
 }
 
 interface PlannedVote {
@@ -71,15 +67,12 @@ const randomHex = (): DemoCredential => ({
   nullifierKeyHex: randomBytes(31).toString("hex"),
 });
 
-const randomIds = (count: number): string[] =>
-  Array.from({ length: count }, () => randomBytes(8).readBigUInt64BE().toString());
-
 export class Seeder {
   private generation = 0;
   private voters: DemoCredential[] = [];
   private phase: "idle" | "registering" | "running" | "done" = "idle";
-  private next: NextBatch | null = null;
-  private preparing = false;
+  private spares: StoredBallot[] = [];
+  private building = false;
   private readonly file: string;
 
   constructor(
@@ -87,8 +80,9 @@ export class Seeder {
     private readonly chain: Chain,
   ) {
     this.file = config.statePath.replace(/\.json$/, "") + ".seed.json";
-    const saved = this.read();
-    if (saved.next && this.batchUsable(saved.next)) this.next = saved.next;
+    this.spares = (this.read().spares ?? []).filter(
+      (spare) => spare.ids.length === config.ballot.races.length && spare.voters.length > 0,
+    );
   }
 
   info(): SimulationInfo {
@@ -100,29 +94,40 @@ export class Seeder {
       else if (this.phase === "registering" || this.voters.length === 0) state = "preparing";
       else state = "ready";
     }
-    return { state, voters: this.voters.length, total };
+    return { state, voters: this.voters.length, total, spares: this.spares.length };
   }
 
   async newBallot(): Promise<void> {
     const generation = ++this.generation;
     this.voters = [];
-    const races = this.config.ballot.races.length;
-    const batch = this.config.seedVoters > 0 && this.next && this.batchUsable(this.next) ? this.next : null;
-    this.next = null;
-    await this.chain.createBallot(batch ? batch.ids.map((id) => BigInt(id)) : undefined);
+    const spare = this.config.seedVoters > 0 ? this.spares.shift() : undefined;
+    if (spare) {
+      this.chain.switchTo(spare.ids.map((id) => BigInt(id)));
+      this.voters = spare.voters;
+      this.phase = "idle";
+      this.write({ current: spare, spares: this.spares });
+      void this.refill();
+      return;
+    }
+    await this.chain.createBallot();
     const ids = this.chain.electionIdsNow().map(String);
-    this.write({ current: { ids, voters: [] }, next: undefined });
+    this.write({ current: { ids, voters: [] }, spares: this.spares });
     if (this.config.seedVoters < 1) {
       this.phase = "idle";
       return;
     }
     this.phase = "registering";
-    void this.registerAll(generation, ids, batch?.voters ?? [])
+    void this.registerVoters(ids, (voter) => {
+      if (this.stale(generation)) return false;
+      this.voters.push(voter);
+      this.write({ current: { ids, voters: this.voters } });
+      return true;
+    })
       .catch(() => undefined)
       .finally(() => {
         if (this.stale(generation)) return;
         if (this.phase === "registering") this.phase = "idle";
-        void this.prepareNext(races).catch(() => undefined);
+        void this.refill();
       });
   }
 
@@ -137,7 +142,7 @@ export class Seeder {
         if (info.phase !== "registration" && this.phase === "idle") this.phase = "done";
       })
       .catch(() => undefined);
-    if (this.config.seedVoters > 0) void this.prepareNext(this.config.ballot.races.length).catch(() => undefined);
+    void this.refill();
   }
 
   simulate(): void {
@@ -171,57 +176,51 @@ export class Seeder {
     writeFileSync(this.file, JSON.stringify({ ...this.read(), ...patch }) + "\n");
   }
 
-  private batchUsable(batch: NextBatch): boolean {
-    const today = yymmdd(new Date());
-    const yesterday = yymmdd(new Date(Date.now() - DAY_MS));
-    return (
-      batch.ids.length === this.config.ballot.races.length &&
-      batch.voters.length >= this.config.seedVoters &&
-      (batch.date === today || batch.date === yesterday)
-    );
-  }
-
-  private async registerAll(generation: number, ids: string[], ready: PreparedVoter[]): Promise<void> {
+  private async registerVoters(ids: string[], accept: (voter: DemoCredential) => boolean): Promise<void> {
     const electionIds = ids.map((id) => BigInt(id));
     const inFlight = new Set<Promise<void>>();
-    const registerVoter = async (voter: PreparedVoter, proofs: ProofBody[]): Promise<void> => {
-      if (this.stale(generation) || (await this.chain.info()).phase !== "registration") return;
-      const results = await Promise.allSettled(proofs.map((proof) => this.chain.register(proof)));
-      if (this.stale(generation) || !results.every((result) => result.status === "fulfilled")) return;
-      this.voters.push({ secretHex: voter.secretHex, nullifierKeyHex: voter.nullifierKeyHex });
-      this.write({ current: { ids, voters: this.voters } });
-    };
-    for (let i = 0; i < this.config.seedVoters; i++) {
-      if (this.stale(generation) || (await this.chain.info()).phase !== "registration") break;
-      const voter = ready[i] ?? { ...randomHex(), proofs: [] };
-      const proofs =
-        voter.proofs.length === electionIds.length
-          ? voter.proofs
-          : await proveMockRegistrationsInBackground(this.config, voter, electionIds, 3);
-      while (inFlight.size >= 2) await Promise.race(inFlight);
-      const task = registerVoter(voter, proofs).catch(() => undefined);
+    let stop = false;
+    for (let i = 0; i < this.config.seedVoters && !stop; i++) {
+      const voter = randomHex();
+      while (this.phase === "running" && ids.join(",") !== this.chain.electionIdsNow().map(String).join(",")) await wait(1000);
+      const proofs = await proveMockRegistrationsInBackground(this.config, voter, electionIds, 3);
+      while (inFlight.size >= REGISTER_AT_ONCE) await Promise.race(inFlight);
+      const task = Promise.allSettled(proofs.map((proof) => this.chain.register(proof))).then((results) => {
+        if (results.every((result) => result.status === "fulfilled")) {
+          if (!accept(voter)) stop = true;
+          return;
+        }
+        const closed = results.some(
+          (result) => result.status === "rejected" && result.reason instanceof RelayError && result.reason.code === "WrongPhase",
+        );
+        if (closed) stop = true;
+      });
       inFlight.add(task);
       void task.finally(() => inFlight.delete(task));
     }
     await Promise.all(inFlight);
   }
 
-  private async prepareNext(races: number): Promise<void> {
-    if (this.preparing || (this.next && this.batchUsable(this.next))) return;
-    this.preparing = true;
+  private async refill(): Promise<void> {
+    if (this.building || this.config.seedVoters < 1) return;
+    this.building = true;
     try {
-      const ids = randomIds(races);
-      const electionIds = ids.map((id) => BigInt(id));
-      const date = yymmdd(new Date());
-      const voters: PreparedVoter[] = [];
-      for (let i = 0; i < this.config.seedVoters; i++) {
-        const hex = randomHex();
-        voters.push({ ...hex, proofs: await proveMockRegistrationsInBackground(this.config, hex, electionIds, 2) });
+      while (this.spares.length < this.config.spareBallots) {
+        while (this.phase === "running") await wait(1000);
+        const ids = (await this.chain.createElections()).map(String);
+        const voters: DemoCredential[] = [];
+        await this.registerVoters(ids, (voter) => {
+          voters.push(voter);
+          return true;
+        });
+        if (voters.length === 0) break;
+        this.spares.push({ ids, voters });
+        this.write({ spares: this.spares });
       }
-      this.next = { ids, date, voters };
-      this.write({ next: this.next });
+    } catch {
+      return;
     } finally {
-      this.preparing = false;
+      this.building = false;
     }
   }
 
@@ -253,25 +252,41 @@ export class Seeder {
     }
     shuffle(planned);
     const repeatAt = Math.floor(planned.length / 2);
+    const proofs: Promise<ProofBody>[] = [];
+    let next = 0;
+    const proveAhead = () => {
+      while (next < planned.length && next - sentCount < PROVE_AHEAD) {
+        const item = planned[next]!;
+        proofs[next] = this.prove(item.voter, trees[item.race]!, BigInt(info.races[item.race]!.electionId), item.option);
+        proofs[next]!.catch(() => undefined);
+        next++;
+      }
+    };
+    let sentCount = 0;
     const pending: Promise<unknown>[] = [];
+    proveAhead();
     for (const [index, item] of planned.entries()) {
       if (this.stale(generation)) return;
       const race = info.races[item.race]!;
       const electionId = BigInt(race.electionId);
-      const proof = await this.prove(item.voter, trees[item.race]!, electionId, item.option);
+      const started = Date.now();
+      const proof = await proofs[index]!;
+      sentCount = index + 1;
+      proveAhead();
       if (this.stale(generation)) return;
       const sent = this.chain.vote(proof).catch(() => undefined);
       pending.push(sent);
       if (index === repeatAt) {
-        const again = await this.prove(item.voter, trees[item.race]!, electionId, (item.option + 1) % race.candidates.length);
+        const again = this.prove(item.voter, trees[item.race]!, electionId, (item.option + 1) % race.candidates.length);
         pending.push(
           sent
             .then(() => wait(1500))
-            .then(() => this.chain.vote(again))
+            .then(async () => this.chain.vote(await again))
             .catch(() => undefined),
         );
       }
-      await wait(1000 + Math.random() * 4000);
+      const gap = this.config.seedPaceMs * (0.6 + Math.random() * 0.8);
+      await wait(Math.max(0, gap - (Date.now() - started)));
     }
     await Promise.all(pending);
   }

@@ -60,31 +60,6 @@ Votify is built to protect personal information and strengthen trust in one of t
 - **Your voter ID is locked to you.** It is kept in the iPhone's secure Keychain and only shown after Face ID.
 - **No trail back to you.** A relayer pays every transaction fee, so no wallet or account is ever linked to a vote. It keeps no logs of who sent what, and the kiosk erases your voter ID from memory as soon as you finish.
 
-## How it works
-
-```mermaid
-sequenceDiagram
-    autonumber
-    actor Voter
-    participant App as iPhone app
-    participant Relayer
-    participant Program as Solana program
-    participant Kiosk as Voting booth kiosk
-
-    Voter->>App: Scan the photo page, tap the passport
-    App->>App: Read the chip, check the government signature
-    App->>Relayer: Registration proof
-    Relayer->>Program: register(proof)
-    Program-->>Program: Verify the proof, add the voter to the Merkle tree
-    App-->>Voter: Anonymous voter ID (QR code)
-    Voter->>Kiosk: Show the QR code, fill in the ballot
-    Kiosk->>Kiosk: Build the vote proof in the browser
-    Kiosk->>Relayer: Vote proof
-    Relayer->>Program: cast_vote(proof)
-    Program-->>Program: Verify the proof, record the nullifier, add to the tally
-    Program-->>Voter: Public result anyone can check
-```
-
 ## How we built it
 
 - **Zero-knowledge circuits:** written in Circom. They check the passport's government signature and prove you're an eligible voter without revealing who you are. We wrote our own RSA and SHA-256 code for this.

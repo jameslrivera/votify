@@ -21,7 +21,7 @@ LEDGER=$(mktemp -d -t zk-election-demo)
 PIDS=()
 
 cleanup() {
-  for pid in "${PIDS[@]}"; do kill "$pid" 2>/dev/null || true; done
+  for pid in ${PIDS[@]:-}; do kill "$pid" 2>/dev/null || true; done
   rm -rf "$LEDGER"
 }
 trap cleanup EXIT INT TERM
@@ -59,6 +59,5 @@ echo
 echo "Demo is running. Press Ctrl+C to stop."
 echo "  Results:  $SCHEME://localhost:5173/results"
 echo "  Kiosk:    $SCHEME://$LAN_IP:5173/kiosk"
-echo "  Controls: $SCHEME://localhost:5173/admin"
 echo "  Add a mock voter: make demo:voter"
 wait

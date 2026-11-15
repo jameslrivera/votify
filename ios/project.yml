@@ -1,0 +1,61 @@
+name: ZKElection
+options:
+  bundleIdPrefix: dev.zkelection
+  deploymentTarget:
+    iOS: "15.0"
+  createIntermediateGroups: true
+configFiles:
+  Debug: Config/Signing.xcconfig
+  Release: Config/Signing.xcconfig
+settings:
+  base:
+    SWIFT_VERSION: "5.0"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+packages:
+  NFCPassportReader:
+    url: https://github.com/AndyQ/NFCPassportReader.git
+    exactVersion: 3.0.0
+  PassportKit:
+    path: PassportKit
+targets:
+  PassportProbe:
+    type: application
+    platform: iOS
+    sources:
+      - path: PassportProbe/Sources
+      - path: PassportProbe/Assets.xcassets
+      - path: PassportKit/Tests/PassportKitTests/Fixtures
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - package: NFCPassportReader
+      - package: PassportKit
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: $(BUNDLE_ID_PREFIX).passportprobe
+        TARGETED_DEVICE_FAMILY: "1"
+        CODE_SIGN_ENTITLEMENTS: PassportProbe/PassportProbe.entitlements
+        ENABLE_USER_SCRIPT_SANDBOXING: YES
+        ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    info:
+      path: PassportProbe/Info.plist
+      properties:
+        CFBundleDisplayName: Votify
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations: [UIInterfaceOrientationPortrait]
+        NSCameraUsageDescription: The camera reads the code at the bottom of your passport's photo page. The image never leaves this phone.
+        NSFaceIDUsageDescription: Face ID unlocks your voting code so only you can show it.
+        NSLocalNetworkUsageDescription: Votify talks to the election server on your local network.
+        NSAppTransportSecurity:
+          NSAllowsLocalNetworking: true
+        DemoServerHost: $(DEMO_SERVER_HOST)
+        NFCReaderUsageDescription: NFC reads your passport's chip to check its signature. Nothing read from the chip leaves this phone.
+        com.apple.developer.nfc.readersession.iso7816.select-identifiers:
+          - A0000002471001
+          - A0000002472001
+          - "00000000000000"
+    entitlements:
+      path: PassportProbe/PassportProbe.entitlements
+      properties:
+        com.apple.developer.nfc.readersession.formats: [TAG]

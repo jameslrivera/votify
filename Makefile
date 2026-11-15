@@ -1,4 +1,4 @@
-.PHONY: demo\:voter ios\:build setup circuits\:build program\:build program\:test test e2e demo\:up lint clean
+.PHONY: demo\:voter ios\:build setup circuits\:build program\:build program\:test test e2e demo\:up demo\:devnet demo\:hosted demo\:start demo\:stop lint clean
 
 setup:
 	./scripts/setup.sh
@@ -31,6 +31,18 @@ lint:
 
 demo\:up:
 	./scripts/demo-up.sh
+
+demo\:devnet:
+	./scripts/demo-devnet.sh
+
+demo\:start:
+	./scripts/demo-start.sh
+
+demo\:stop:
+	./scripts/demo-stop.sh
+
+demo\:hosted:
+	./scripts/demo-hosted.sh
 
 demo\:voter:
 	pnpm demo:voter

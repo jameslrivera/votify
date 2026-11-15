@@ -4,44 +4,39 @@ on:
     branches: [main]
   pull_request:
 
-env:
-  SOLANA_VERSION: 4.1.2
-  ANCHOR_VERSION: 1.2.2
-  CIRCOM_VERSION: v2.2.3
-
 jobs:
-  test:
-    runs-on: macos-15
-    timeout-minutes: 60
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 24
+      - name: Enable pnpm
+        run: |
+          npm install -g corepack@latest
+          corepack enable pnpm
+      - name: Install JavaScript dependencies
+        run: pnpm install --frozen-lockfile
+      - name: Install Rust
+        run: rustup toolchain install 1.89.0 --profile minimal --component rustfmt,clippy
       - uses: actions/cache@v4
         with:
           path: |
-            ~/.cargo/bin
             ~/.cargo/registry
-            ~/.avm
-            ~/.local/share/solana
-            ~/.cache/solana
             target
-          key: toolchain-${{ runner.os }}-${{ env.SOLANA_VERSION }}-${{ env.ANCHOR_VERSION }}-${{ env.CIRCOM_VERSION }}-${{ hashFiles('Cargo.lock') }}
-      - name: Setup (toolchain, dependencies, circuits, program)
-        run: ./scripts/setup.sh
-      - name: Lint
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.avm/bin:$HOME/.cargo/bin:$PATH"
-          make lint
-      - name: Unit tests
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.avm/bin:$HOME/.cargo/bin:$PATH"
-          make test
-      - name: Program tests (local validator)
-        run: |
-          export PATH="$HOME/.local/share/solana/install/active_release/bin:$HOME/.avm/bin:$HOME/.cargo/bin:$PATH"
-          make program:test
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.lock') }}
+      - name: Rust format
+        run: cargo fmt --all --check
+      - name: Rust lint
+        run: cargo clippy -p zk_election -- -D warnings
+      - name: Rust tests
+        run: cargo test -p zk_election
+      - name: Type check
+        run: pnpm typecheck
+      - name: Package tests
+        run: pnpm --filter "./packages/*" test
       - name: No passport data in the repo
         run: |
           ! git ls-files | grep -E '(^|/)passport-data/|\.passport\.json$'
