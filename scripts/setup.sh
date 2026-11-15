@@ -53,7 +53,7 @@ corepack enable pnpm 2>/dev/null || true
 [ -f "$HOME/.config/solana/id.json" ] || { say "Creating a local Solana keypair"; solana-keygen new --no-bip39-passphrase -s -o "$HOME/.config/solana/id.json"; }
 
 say "Installing JavaScript dependencies"
-COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile
+COREPACK_ENABLE_DOWNLOAD_PROMPT=0 pnpm install --frozen-lockfile --config.strict-dep-builds=false
 
 say "Building circuits (local demo trusted setup)"
 pnpm circuits:build

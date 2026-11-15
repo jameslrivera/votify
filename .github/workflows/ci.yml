@@ -18,7 +18,7 @@ jobs:
           npm install -g corepack@latest
           corepack enable pnpm
       - name: Install JavaScript dependencies
-        run: pnpm install --frozen-lockfile
+        run: pnpm install --frozen-lockfile --config.strict-dep-builds=false
       - name: Install Rust
         run: rustup toolchain install 1.89.0 --profile minimal --component rustfmt,clippy
       - uses: actions/cache@v4
