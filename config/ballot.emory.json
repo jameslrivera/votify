@@ -1,0 +1,33 @@
+{
+  "title": "2026 Midterm Election",
+  "area": "DeKalb County, Georgia",
+  "note": "Candidates are fictional.",
+  "races": [
+    {
+      "office": "Governor",
+      "district": "State of Georgia",
+      "candidates": [
+        "Marguerite Dalton",
+        "Terrence Ayala",
+        "Hana Lindgren"
+      ]
+    },
+    {
+      "office": "U.S. House",
+      "district": "Georgia's 5th District",
+      "candidates": [
+        "Isaiah Pemberton",
+        "Rosalind Achebe"
+      ]
+    },
+    {
+      "office": "County Commission",
+      "district": "DeKalb County District 2",
+      "candidates": [
+        "Lena Hargrove",
+        "Andre Castellano",
+        "Priya Venkataraman"
+      ]
+    }
+  ]
+}

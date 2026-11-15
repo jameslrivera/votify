@@ -1,0 +1,22 @@
+{
+  "name": "@zk-election/relayer",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "tsx src/index.ts",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@anchor-lang/core": "1.2.2",
+    "@solana/web3.js": "1.99.0",
+    "@zk-election/constants": "workspace:*",
+    "@zk-election/proof-format": "workspace:*",
+    "@zk-election/passport": "workspace:*",
+    "@zk-election/merkle": "workspace:*",
+    "snarkjs": "0.7.6"
+  },
+  "devDependencies": {
+    "@types/snarkjs": "0.7.9"
+  }
+}
