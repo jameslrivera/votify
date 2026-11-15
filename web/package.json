@@ -1,0 +1,30 @@
+{
+  "name": "@zk-election/web",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "typecheck": "tsc -p ."
+  },
+  "dependencies": {
+    "@fontsource-variable/inter": "5.3.0",
+    "@fontsource/jetbrains-mono": "5.3.0",
+    "@solana/web3.js": "1.99.0",
+    "@zk-election/constants": "workspace:*",
+    "@zk-election/merkle": "workspace:*",
+    "buffer": "6.0.3",
+    "jsqr": "1.4.0",
+    "react": "19.3.1",
+    "react-dom": "19.3.1",
+    "snarkjs": "0.7.6"
+  },
+  "devDependencies": {
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@types/snarkjs": "0.7.9",
+    "@vitejs/plugin-react": "6.3.0",
+    "vite": "8.3.8"
+  }
+}
